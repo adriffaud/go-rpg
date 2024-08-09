@@ -6,36 +6,18 @@ import (
 	"image/color"
 	"log"
 
+	"github.com/adriffaud/go-rpg/entities"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 )
 
-type Sprite struct {
-	Img  *ebiten.Image
-	X, Y float64
-}
-
-type Player struct {
-	*Sprite
-	Health uint
-}
-
-type Enemy struct {
-	*Sprite
-	FollowsPlayer bool
-}
-
-type Potion struct {
-	*Sprite
-	HealAmt uint
-}
-
 type Game struct {
-	player      *Player
-	enemies     []*Enemy
-	potions     []*Potion
+	player      *entities.Player
+	enemies     []*entities.Enemy
+	potions     []*entities.Potion
 	tilemapJSON *TilemapJSON
 	tilemapImg  *ebiten.Image
+	camera      *Camera
 }
 
 func (g *Game) Update() error {
@@ -74,6 +56,9 @@ func (g *Game) Update() error {
 		}
 	}
 
+	g.camera.FollowTarget(g.player.X+8, g.player.Y+8, 320, 240)
+	g.camera.Constrain(float64(g.tilemapJSON.Layers[0].Width*16), float64(g.tilemapJSON.Layers[0].Height*16), 320, 240)
+
 	return nil
 }
 
@@ -97,23 +82,27 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			srcY *= 16
 
 			opts.GeoM.Translate(float64(x), float64(y))
+			opts.GeoM.Translate(g.camera.X, g.camera.Y)
 			screen.DrawImage(g.tilemapImg.SubImage(image.Rect(srcX, srcY, srcX+16, srcY+16)).(*ebiten.Image), &opts)
 			opts.GeoM.Reset()
 		}
 	}
 
 	opts.GeoM.Translate(g.player.X, g.player.Y)
+	opts.GeoM.Translate(g.camera.X, g.camera.Y)
 	screen.DrawImage(g.player.Img.SubImage(image.Rect(0, 0, 16, 16)).(*ebiten.Image), &opts)
 	opts.GeoM.Reset()
 
 	for _, enemy := range g.enemies {
 		opts.GeoM.Translate(enemy.X, enemy.Y)
+		opts.GeoM.Translate(g.camera.X, g.camera.Y)
 		screen.DrawImage(enemy.Img.SubImage(image.Rect(0, 0, 16, 16)).(*ebiten.Image), &opts)
 		opts.GeoM.Reset()
 	}
 
 	for _, potion := range g.potions {
 		opts.GeoM.Translate(potion.X, potion.Y)
+		opts.GeoM.Translate(g.camera.X, g.camera.Y)
 		screen.DrawImage(potion.Img.SubImage(image.Rect(0, 0, 16, 16)).(*ebiten.Image), &opts)
 		opts.GeoM.Reset()
 	}
@@ -151,17 +140,18 @@ func main() {
 	}
 
 	game := Game{
-		player: &Player{&Sprite{Img: playerImg, X: 50, Y: 50}, 3},
-		enemies: []*Enemy{
-			{&Sprite{Img: skeletonImg, X: 100, Y: 100}, true},
-			{&Sprite{Img: skeletonImg, X: 150, Y: 150}, false},
-			{&Sprite{Img: skeletonImg, X: 75, Y: 75}, false},
+		player: &entities.Player{Sprite: &entities.Sprite{Img: playerImg, X: 50, Y: 50}, Health: 3},
+		enemies: []*entities.Enemy{
+			{Sprite: &entities.Sprite{Img: skeletonImg, X: 100, Y: 100}, FollowsPlayer: true},
+			{Sprite: &entities.Sprite{Img: skeletonImg, X: 150, Y: 150}, FollowsPlayer: false},
+			{Sprite: &entities.Sprite{Img: skeletonImg, X: 75, Y: 75}, FollowsPlayer: false},
 		},
-		potions: []*Potion{
-			{&Sprite{Img: potionImg, X: 210, Y: 100}, 1},
+		potions: []*entities.Potion{
+			{Sprite: &entities.Sprite{Img: potionImg, X: 210, Y: 100}, HealAmt: 1},
 		},
 		tilemapJSON: tilemapJSON,
 		tilemapImg:  tilemapImg,
+		camera:      NewCamera(0, 0),
 	}
 
 	if err := ebiten.RunGame(&game); err != nil {
